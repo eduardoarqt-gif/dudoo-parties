@@ -1,6 +1,6 @@
 'use strict';
 // Dudoo Parties — utilitários puros (sem DOM), testáveis em testes.html.
-const VERSAO = '0.2.0';
+const VERSAO = '0.4.0';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

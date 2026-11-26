@@ -15,7 +15,7 @@ function tela_boasVindas() {
     <div class="escolha"><button class="opcao" data-acao="modo" data-modo="pessoal"><b>🎈 Vou organizar a minha festa</b><span>Aniversário, jantar, casamento… com tudo que preciso, sem complicação.</span></button>
     <button class="opcao" data-acao="modo" data-modo="profissional"><b>💼 Sou profissional de eventos</b><span>Cerimonial, decoração, assessoria: clientes, propostas, contratos, equipe e vários eventos.</span></button></div>
     <p class="mudo pequeno">Você pode trocar isso depois em Ajustes. Seus dados ficam neste aparelho (e, se você quiser, na sua conta da nuvem).</p>
-    <button class="btn" data-acao="carregar-demo">👀 Só quero ver um exemplo pronto</button> <button class="btn" data-acao="nuvem-entrar">☁️ Já tenho conta</button></div></div>`;
+    <button class="btn" data-acao="carregar-demo">👀 Só quero ver um exemplo pronto</button> <button class="btn" data-acao="gh-conectar">🔁 Já uso em outro aparelho</button></div></div>`;
 }
 acoes['modo'] = (el) => { S.config.modo = el.dataset.modo; gravar(); irPara('#/inicio'); };
 
@@ -104,16 +104,29 @@ acoes['evento-editar'] = () => {
     },
   });
 };
+// Troca, em qualquer profundidade (valores e chaves), as referências aos ids antigos pelos novos.
+function reapontarIds(o, mapa) {
+  if (Array.isArray(o)) { o.forEach((v, i) => { if (typeof v === 'string' && Object.prototype.hasOwnProperty.call(mapa, v)) o[i] = mapa[v]; else reapontarIds(v, mapa); }); return; }
+  if (!o || typeof o !== 'object') return;
+  Object.keys(o).forEach((k) => {
+    let v = o[k];
+    if (typeof v === 'string' && Object.prototype.hasOwnProperty.call(mapa, v)) v = mapa[v]; else reapontarIds(v, mapa);
+    if (Object.prototype.hasOwnProperty.call(mapa, k)) { delete o[k]; o[mapa[k]] = v; } else o[k] = v;
+  });
+}
 // Cópia com ids novos (e mesas ligadas aos convidados certos); zera o que é "andamento".
 function clonarEvento(ev) {
   const copia = JSON.parse(JSON.stringify(ev)), mapa = {};
   (function ids(o) { if (Array.isArray(o)) o.forEach(ids); else if (o && typeof o === 'object') { if (typeof o.id === 'string') { const n = uid(); mapa[o.id] = n; o.id = n; } Object.values(o).forEach(ids); } })(copia);
-  copia.convidados.forEach((g) => { if (g.mesaId) g.mesaId = mapa[g.mesaId] || ''; });
+  copia.convidados.forEach((g) => { if (g.mesaId && !Object.values(mapa).includes(g.mesaId)) g.mesaId = mapa[g.mesaId] || ''; });
+  reapontarIds(copia, mapa);
   copia.checklist.forEach((c) => { c.feito = false; }); copia.compras.forEach((c) => { c.comprado = false; });
   copia.fornecedores.forEach((f) => (f.pagamentos || []).forEach((p) => { p.pago = false; delete p.dataPago; }));
   (copia.contrato.parcelas || []).forEach((p) => { p.pago = false; });
   copia.convidados.forEach((g) => { g.rsvp = 'pendente'; });
   copia.proposta.status = 'rascunho'; delete copia.proposta.aprovadoEm; delete copia.proposta.aprovadoPor;
+  (copia.presentes || []).forEach((p) => { p.doacoes = []; });   // campos do Lite: quem deu o quê e o check-in são da festa antiga
+  copia.convidados.forEach((g) => { ['chegou', 'cobradoEm', 'cobradoN', 'cadeira', 'cadeiraMesa'].forEach((k) => delete g[k]); });
   copia.status = 'planejando'; copia.nome = ev.nome + ' (cópia)'; copia.criadoEm = hojeIso();
   return copia;
 }
@@ -137,14 +150,14 @@ acoes['evento-modelo'] = () => formulario({
 });
 
 // ---------- Hub do evento ----------
-function listaAbas(ev) {
+function listaAbas(ev, todas = false) {
   const k = contarConvidados(ev), p = progressoChecklist(ev);
   const a = [['resumo', 'Resumo'], ['convidados', `Convidados (${k.convites})`], ['mesas', 'Mesas'], ['quantidades', 'Quantidades'], ['compras', `Compras (${ev.compras.length})`], ['checklist', `Checklist (${p.feitas}/${p.total})`],
     ['cronograma', 'Cronograma'], ['roteiro', 'Roteiro'], ['fornecedores', `Fornecedores (${ev.fornecedores.length})`], ['orcamento', 'Orçamento'], ['playlist', 'Playlist'], ['moodboard', 'Moodboard'],
     ['equipe', ehPro() ? 'Equipe' : 'Ajudantes']];
   if (ehPro()) a.push(['proposta', 'Proposta'], ['contrato', 'Contrato']);
   a.push(['imprimir', 'Imprimir']);
-  return a;
+  return todas ? a : a.filter(([id]) => ABAS_FIXAS.includes(id) || !(ev.abasOcultas || []).includes(id));
 }
 function tela_evento() {
   const r = rotaAtual(), ev = evento(r.a);
@@ -154,9 +167,22 @@ function tela_evento() {
     <div class="et-linha"><div class="et-ic">${iconeTipo(ev.tipo)}</div><div><h1>${esc(ev.nome)}</h1>
     <p class="mudo">${ev.data ? `${dataBr(ev.data)} (${diaSemana(ev.data)})` : 'Sem data'}${ev.hora ? ' às ' + esc(ev.hora) : ''}${ev.local ? ' · ' + esc(ev.local) : ''}${ev.clienteId ? ' · ' + esc(nomeCliente(ev.clienteId)) : ''}</p></div>
     ${ev.data ? `<div class="et-selo">${selo(contagem(ev.data), 'forte')}</div>` : ''}</div></div>
-    <nav class="abas" id="abas">${listaAbas(ev).map(([id, t]) => `<a class="aba ${id === aba ? 'ativa' : ''}" href="#/evento/${ev.id}/${id}" data-aba="${id}">${esc(t)}</a>`).join('')}</nav>
+    <nav class="abas" id="abas">${listaAbas(ev).map(([id, t]) => `<a class="aba ${id === aba ? 'ativa' : ''}" href="#/evento/${ev.id}/${id}" data-aba="${id}">${esc(t)}</a>`).join('')}<button class="aba aba-config" data-acao="abas-escolher" title="Escolher quais abas aparecem neste evento">⚙ Abas</button></nav>
     <section class="aba-corpo">${ABAS[aba](ev)}</section>`;
 }
+
+acoes['abas-escolher'] = () => {
+  const ev = evAtual(), opc = listaAbas(ev, true).filter(([id]) => !ABAS_FIXAS.includes(id)).map(([id, t]) => [id, t.replace(/\s*\(.*\)$/, '')]);
+  const oc = ev.abasOcultas || [];
+  formulario({
+    titulo: 'Abas deste evento', largo: true, intro: 'Marque só o que você vai usar. Nada é apagado: o conteúdo de uma aba escondida continua guardado.',
+    campos: [{ id: 'abas', rotulo: 'Mostrar', tipo: 'chips', opcoes: opc.map((o) => o[1]), larg: 'inteiro' }], valores: { abas: opc.filter(([id]) => !oc.includes(id)).map((o) => o[1]) },
+    salvar: (v) => {
+      const mostradas = new Set(v.abas), naoListadas = oc.filter((id) => !opc.some((o) => o[0] === id));   // mantém o que não aparece neste modo
+      ev.abasOcultas = [...naoListadas, ...opc.filter(([, t]) => !mostradas.has(t)).map(([id]) => id)]; alterou();
+    },
+  });
+};
 
 ABAS.resumo = (ev) => {
   const k = contarConvidados(ev), p = progressoChecklist(ev), f = resumoFinanceiro(ev), lem = lembretes({ eventos: [ev], clientes: S.clientes }, hojeIso(), 14);

@@ -113,6 +113,10 @@ function regrasPadrao(tipo) {
 
 const REG_APLICA = [['todos', 'Todos (adultos e crianças)'], ['adultos', 'Só adultos'], ['criancas', 'Só crianças'], ['vegetarianos', 'Só vegetarianos/veganos']];
 
+// Modo "Minha festa": abas que costumam sobrar em cada tipo (o usuário liga de volta em "⚙ Abas"). Resumo e Convidados sempre aparecem.
+const ABAS_FIXAS = ['resumo', 'convidados'];
+const ABAS_OCULTAS_PADRAO = { aniversario: ['roteiro'], infantil: ['roteiro'], jantar: ['roteiro', 'moodboard', 'equipe'], cha: ['roteiro'], churrasco: ['roteiro', 'moodboard', 'equipe', 'mesas'], outro: ['roteiro'] };
+
 // Constrói um evento já com checklist, cronograma, roteiro, orçamento e regras do tipo.
 function novoEvento(d) {
   const t = tipoDe(d.tipo);
@@ -121,6 +125,7 @@ function novoEvento(d) {
     status: 'planejando', obs: d.obs || '', orcamentoTotal: num(d.orcamentoTotal), duracaoH: num(d.duracaoH) || t.horas, criadoEm: hojeIso(),
   });
   ev.qtd.regras = regrasPadrao(t.id);
+  if (S.config.modo === 'pessoal') ev.abasOcultas = [...(ABAS_OCULTAS_PADRAO[t.id] || [])];
   ev.proposta.condicoes = CONDICOES_PADRAO;
   if (d.modelo && d.modelo !== 'nenhum' && d.modelo !== 'padrao') {
     const m = S.modelos.find((x) => x.id === d.modelo);
@@ -151,7 +156,7 @@ function modeloDeEvento(ev, nome) {
   const ini = ev.hora || '18:00';
   const minDe = (h) => { const [a, b] = String(h || ini).split(':').map(Number); const [c, d] = ini.split(':').map(Number); return a * 60 + (b || 0) - (c * 60 + (d || 0)); };
   return {
-    id: uid(), nome, tipo: ev.tipo, criadoEm: hojeIso(),
+    id: uid(), nome, tipo: ev.tipo, criadoEm: hojeIso(), abasOcultas: ev.abasOcultas ? [...ev.abasOcultas] : undefined,
     checklist: ev.checklist.map((c) => ({ texto: c.texto, grupo: c.grupo, dias: c.prazo && ev.data ? diasEntre(c.prazo, ev.data) : (c.dias != null ? c.dias : null) })),
     cronograma: ev.cronograma.map((c) => ({ texto: c.texto, tipo: c.tipo, min: minDe(c.hora) })),
     roteiro: ev.roteiro.map((r) => ({ tipo: r.tipo, texto: r.texto, musica: r.musica })),
@@ -161,6 +166,7 @@ function modeloDeEvento(ev, nome) {
   };
 }
 function aplicarModeloSalvo(ev, m) {
+  if (m.abasOcultas) ev.abasOcultas = [...m.abasOcultas];
   ev.checklist = (m.checklist || []).map((c) => ({ id: uid(), texto: c.texto, grupo: c.grupo, resp: '', prazo: prazoRelativo(ev, c.dias), feito: false, dias: c.dias }));
   const ini = ev.hora || '18:00';
   ev.cronograma = (m.cronograma || []).map((c) => ({ id: uid(), hora: somaMin(ini, c.min), texto: c.texto, tipo: c.tipo, resp: '', obs: '' }));

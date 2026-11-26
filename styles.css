@@ -193,3 +193,4 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--cor);outline-off
 @keyframes giro{to{transform:rotate(360deg)}}
 @media(max-width:860px){#nuvem-ind{top:8px;right:8px;padding:4px 9px}#nuvem-ind.st-desconectado small,#nuvem-ind.st-ok small{display:none}}
 @media print{#nuvem-ind{display:none!important}}
+button.aba-config{background:none;border:0;border-bottom:3px solid transparent;font:inherit;font-weight:600;cursor:pointer;margin-left:auto}

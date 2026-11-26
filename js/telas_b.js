@@ -77,7 +77,7 @@ function htmlConvites(ev, nuv) {
 }
 acoes['conv-convites'] = async () => {
   const ev = evAtual();
-  if (!nuvemLogada()) { abrirModal(htmlConvites(ev), { largo: true }); return; }
+  if (!nuvemComLinks()) { abrirModal(htmlConvites(ev), { largo: true }); return; }
   abrirModal('<h3>Enviar convites</h3><p class="mudo">☁️ Preparando os links…</p>', { largo: true });
   let nuv;
   try { await publicarNuvem('convite', ev); nuv = { ok: true }; } catch (e) { nuv = { ok: false, erro: e.offline ? 'sem conexão' : e.message }; }

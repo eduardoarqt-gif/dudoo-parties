@@ -134,11 +134,13 @@ const dataHoraBr = (iso) => { const d = new Date(iso); if (!iso || isNaN(d)) ret
 const nuvem = { status: 'desconectado', erro: '', ocupado: false, repetir: false, timer: null, renderPendente: false, ultimaTentativa: 0 };
 const nuvemLogada = () => !!(S.sync && S.sync.token && S.sync.servidor);
 const servidorPadrao = () => (/^https?:$/.test(location.protocol) ? location.origin : '');
+const nuvemComLinks = () => nuvemLogada() && !ehGitHub();   // só a conta do servidor publica links com resposta automática
 const rotaPublica = () => ['c', 'p', 'convite', 'proposta'].includes(rotaAtual().tela);
 const avisoNuvem = () => (nuvemLogada() ? ' Como você está conectado à nuvem, os outros aparelhos também serão atualizados.' : '');
 
 // Chamada à API. Lança Error com .status (HTTP) ou .offline (sem rede / servidor fora do ar).
 async function nuvemApi(metodo, caminho, corpo, { servidor, token, timeout = 25000 } = {}) {
+  if (servidor === undefined && ehGitHub()) return ghApi(metodo, caminho, corpo);   // meus aparelhos: o repositório privado faz o papel do servidor
   const base = servidor !== undefined ? servidor : S.sync.servidor, tk = token !== undefined ? token : S.sync.token;
   const ctl = typeof AbortController === 'function' ? new AbortController() : null, t = ctl ? setTimeout(() => ctl.abort(), timeout) : null;
   let resp;
@@ -211,7 +213,7 @@ async function sincronizar({ manual = false } = {}) {
     if (mudouTela || respAplicadas) { nuvem.renderPendente = true; tentarRender(); }
     if (adiou) agendarSync(3000); else if (respAplicadas) agendarSync(1500);
   } catch (e) {
-    if (e.status === 401) { S.sync.token = ''; S.sync.conta = null; definirStatus('desconectado'); toast('Sua sessão da nuvem expirou. Entre de novo em Ajustes.', true); }
+    if (e.status === 401) { S.sync.token = ''; S.sync.conta = null; definirStatus('desconectado'); toast(ehGitHub() ? 'O token do GitHub foi recusado ou expirou. Conecte de novo em Ajustes.' : 'Sua sessão da nuvem expirou. Entre de novo em Ajustes.', true); }
     else definirStatus(e.offline ? 'offline' : 'erro', e.offline ? '' : e.message);
     gravarAgora();   // guarda os carimbos de data das mudanças pendentes
     if (manual) toast(e.offline ? 'Sem conexão com o servidor. Seus dados continuam salvos aqui.' : e.message, true);
@@ -238,7 +240,7 @@ async function publicarNuvem(tipo, ev) {
   S.sync.publicados[chaveDoc(tipo, ev.id)] = { codigo: r.codigo, fp: impressao(corpo) };
   gravarAgora(); return r.codigo;
 }
-const codigoPublicado = (tipo, ev) => { const p = nuvemLogada() && S.sync.publicados[chaveDoc(tipo, ev.id)]; return p ? p.codigo : ''; };
+const codigoPublicado = (tipo, ev) => { const p = nuvemComLinks() && S.sync.publicados[chaveDoc(tipo, ev.id)]; return p ? p.codigo : ''; };
 // Links que o app usa: da nuvem quando já foi publicado, senão os links sem servidor de sempre.
 function linkConviteAuto(ev, g) { const c = codigoPublicado('convite', ev); return c ? linkNuvemConvite(S.sync.servidor, c, g && g.id) : linkConvite(ev, g); }
 function linkPropostaAuto(ev) { const c = codigoPublicado('proposta', ev); return c ? linkNuvemProposta(S.sync.servidor, c) : linkProposta(ev); }
@@ -248,7 +250,7 @@ async function conectarConta(criar, { servidor, email, senha, nome }) {
   const r = await nuvemApi('POST', criar ? '/api/conta' : '/api/entrar', criar ? { email, senha, nome } : { email, senha }, { servidor: srv, token: '' });
   const sy = S.sync;
   if (sy.contaId && sy.contaId !== r.conta.id || sy.servidor && sy.servidor !== srv) Object.assign(sy, { cursor: 0, cursorRespostas: 0, fp: {}, conhecidos: [], pend: {}, publicados: {}, ultimaSync: '' });   // outra conta/servidor: recomeça
-  Object.assign(sy, { servidor: srv, token: r.token, conta: r.conta, contaId: r.conta.id });
+  Object.assign(sy, { tipo: 'servidor', servidor: srv, token: r.token, conta: r.conta, contaId: r.conta.id });
   gravarAgora(); definirStatus('ok'); sincronizar({ manual: true });
 }
 async function sairDaNuvem() {
@@ -271,6 +273,12 @@ if (!window.__TESTE) {
 // ======================= PARTE 3 — telas =======================
 function cartaoNuvem() {
   const sy = S.sync;
+  if (nuvemLogada() && ehGitHub()) {
+    return `<div class="cartao" id="cartaoNuvem"><h3>☁️ Sincronização pelo GitHub</h3>
+      <p>Repositório privado: <b>${esc(sy.repo)}</b></p><p id="nuvemStatusTxt">${htmlStatusNuvem()}</p>
+      <p class="mudo pequeno">Seus eventos ficam iguais nos aparelhos conectados a este repositório. Convites e propostas continuam pelo WhatsApp (cole as respostas em “Colar respostas”).</p>
+      <div class="botoes-lin"><button class="btn primario" data-acao="nuvem-agora">🔄 Sincronizar agora</button><button class="btn" data-acao="nuvem-sair">Desconectar este aparelho</button></div></div>`;
+  }
   if (nuvemLogada()) {
     return `<div class="cartao" id="cartaoNuvem"><h3>☁️ Conta e nuvem</h3>
       <p>Conectado como <b>${esc((sy.conta && sy.conta.nome) || '')}</b> <span class="mudo">(${esc((sy.conta && sy.conta.email) || '')})</span><br><small class="mudo">Servidor: ${esc(sy.servidor)}</small></p>
@@ -278,10 +286,12 @@ function cartaoNuvem() {
       <p class="mudo pequeno">Seus eventos, clientes e ajustes ficam iguais em todos os aparelhos onde você entrar com esta conta. As respostas dos convites e a aprovação das propostas chegam sozinhas.</p>
       <div class="botoes-lin"><button class="btn primario" data-acao="nuvem-agora">🔄 Sincronizar agora</button><button class="btn" data-acao="nuvem-sair">Sair da conta</button></div></div>`;
   }
-  return `<div class="cartao" id="cartaoNuvem"><h3>☁️ Conta e nuvem</h3>
+  return `<div class="cartao"><h3>🔁 Meus aparelhos (grátis, pelo GitHub)</h3><p class="mudo">Para ter os mesmos eventos no computador e no celular usando um repositório privado seu. Sem servidor e sem mensalidade.</p>
+    <div class="botoes-lin"><button class="btn primario" data-acao="gh-conectar">Conectar GitHub</button></div></div>
+  <div class="cartao" id="cartaoNuvem"><h3>☁️ Conta e nuvem (servidor)</h3>
     <p class="mudo">Opcional. Com uma conta, seus dados ficam iguais no computador e no celular, e as respostas dos convites chegam sozinhas (sem copiar e colar do WhatsApp). Sem conta, tudo continua funcionando só neste aparelho.</p>
     <p id="nuvemStatusTxt">${htmlStatusNuvem()}</p>
-    <div class="botoes-lin"><button class="btn primario" data-acao="nuvem-entrar">Entrar</button><button class="btn" data-acao="nuvem-criar">Criar conta</button></div></div>`;
+    <div class="botoes-lin"><button class="btn" data-acao="nuvem-entrar">Entrar</button><button class="btn" data-acao="nuvem-criar">Criar conta</button></div></div>`;
 }
 function formConta(criar) {
   const campos = [{ id: 'servidor', rotulo: 'Servidor', tipo: 'texto', req: true, larg: 'inteiro', valor: S.sync.servidor || servidorPadrao(), ph: 'https://parties.seudominio.com.br', dica: 'O endereço onde o servidor do Dudoo Parties está rodando.' }];

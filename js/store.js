@@ -13,7 +13,7 @@ function dadosVazios() {
 // Estado da nuvem (js/nuvem.js). Mora dentro de S mas NÃO vai no backup exportado.
 // pend: carimbos de data das mudanças ainda não enviadas ("tipo:id" → {fp, t}); contaId: conta da qual cursor/fp valem.
 function syncVazio() {
-  return { servidor: '', token: '', conta: null, contaId: 0, cursor: 0, cursorRespostas: 0, fp: {}, conhecidos: [], pend: {}, ultimaSync: '', publicados: {} };
+  return { tipo: '', repo: '', servidor: '', token: '', conta: null, contaId: 0, cursor: 0, cursorRespostas: 0, fp: {}, conhecidos: [], pend: {}, ultimaSync: '', publicados: {} };
 }
 function migrar(d) {
   const v = dadosVazios();
